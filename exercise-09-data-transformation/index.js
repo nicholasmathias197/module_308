@@ -20,13 +20,18 @@ const submissions = [
 console.log("=== Task 1: Unique Learner IDs ===");
 
 function getUniqueLearnerIds(submissions) {
-    // TODO: Loop through submissions and collect unique learner_id values
-    // Hint: Use an array and check if ID already exists before adding
+    const learnerIds = [];
+    submissions.forEach(submission => {
+        if (!learnerIds.includes(submission.learner_id)) {
+            learnerIds.push(submission.learner_id);
+        }
+    });
+    return learnerIds;
 }
 
 // TODO: Uncomment after creating function
-// const learnerIds = getUniqueLearnerIds(submissions);
-// console.log("Unique Learner IDs:", learnerIds);
+const learnerIds = getUniqueLearnerIds(submissions);
+console.log("Unique Learner IDs:", learnerIds);
 
 // Task 2: Get submissions for a specific learner
 // TODO: Filter submissions to get only those for a specific learner
@@ -34,11 +39,12 @@ console.log("\n=== Task 2: Filter by Learner ===");
 
 function getSubmissionsForLearner(submissions, learnerId) {
     // TODO: Return array of submissions where learner_id matches
+    return submissions.filter(submission => submission.learner_id === learnerId);
 }
 
 // TODO: Uncomment after creating function
-// const learner125Submissions = getSubmissionsForLearner(submissions, 125);
-// console.log("Learner 125 submissions:", learner125Submissions);
+const learner125Submissions = getSubmissionsForLearner(submissions, 125);
+console.log("Learner 125 submissions:", learner125Submissions);
 
 // Task 3: Calculate percentage for each submission
 // TODO: For each submission, calculate the percentage score
@@ -47,27 +53,57 @@ console.log("\n=== Task 3: Calculate Percentages ===");
 function calculateSubmissionPercentages(submissions, assignments) {
     // TODO: For each submission, find matching assignment and calculate percentage
     // Return array of objects: { learner_id, assignment_id, percentage }
+    const percentages = [];
+    
+    submissions.forEach(submission => {
+        // Find the matching assignment
+        const assignment = assignments.find(a => a.id === submission.assignment_id);
+        
+        if (assignment && assignment.points_possible > 0) {
+            const percentage = (submission.submission.score / assignment.points_possible) * 100;
+            percentages.push({
+                learner_id: submission.learner_id,
+                assignment_id: submission.assignment_id,
+                percentage: percentage
+            });
+        }
+    });
+    
+    return percentages;
 }
 
 // TODO: Uncomment after creating function
-// const percentages = calculateSubmissionPercentages(submissions, assignments);
-// console.log("Percentages:", percentages);
+const percentages = calculateSubmissionPercentages(submissions, assignments);
+console.log("Percentages:", percentages);
 
 // Task 4: Calculate weighted average for a learner
 // TODO: Calculate weighted average across all assignments for one learner
 console.log("\n=== Task 4: Weighted Average ===");
 
 function calculateWeightedAverage(learnerSubmissions, assignments) {
-    // TODO: 
+    // TODO:
     // 1. For each submission, find the matching assignment
     // 2. Sum up all scores
     // 3. Sum up all points_possible
     // 4. Return totalScore / totalPossible
+    let totalScore = 0;
+    let totalPossible = 0;
+    
+    learnerSubmissions.forEach(submission => {
+        const assignment = assignments.find(a => a.id === submission.assignment_id);
+        if (assignment) {
+            totalScore += submission.submission.score;
+            totalPossible += assignment.points_possible;
+        }
+    });
+    
+    if (totalPossible === 0) return 0;
+    return totalScore / totalPossible;
 }
 
 // TODO: Uncomment after creating function
-// const avg = calculateWeightedAverage(learner125Submissions, assignments);
-// console.log("Learner 125 weighted average:", avg);
+const avg = calculateWeightedAverage(learner125Submissions, assignments);
+console.log("Learner 125 weighted average:", avg);
 
 // Task 5: Build a result object for one learner
 // TODO: Create an object in the SBA format for one learner
@@ -88,16 +124,33 @@ function buildLearnerResult(learnerId, learnerSubmissions, assignments) {
         avg: 0
     };
     
-    // TODO: Calculate average
+    // Calculate average
+    let totalScore = 0;
+    let totalPossible = 0;
     
-    // TODO: For each submission, add assignment_id: percentage to result
+    // For each submission, add assignment_id: percentage to result
+    learnerSubmissions.forEach(submission => {
+        const assignment = assignments.find(a => a.id === submission.assignment_id);
+        if (assignment && assignment.points_possible > 0) {
+            const percentage = (submission.submission.score / assignment.points_possible) * 100;
+            result[submission.assignment_id] = percentage;
+            
+            totalScore += submission.submission.score;
+            totalPossible += assignment.points_possible;
+        }
+    });
+    
+    // Calculate weighted average
+    if (totalPossible > 0) {
+        result.avg = totalScore / totalPossible;
+    }
     
     return result;
 }
 
 // TODO: Uncomment after creating function
-// const learner125Result = buildLearnerResult(125, learner125Submissions, assignments);
-// console.log("Learner 125 result:", learner125Result);
+const learner125Result = buildLearnerResult(125, learner125Submissions, assignments);
+console.log("Learner 125 result:", learner125Result);
 
 // Task 6: Process all learners
 // TODO: Create result objects for ALL learners
@@ -109,12 +162,22 @@ function processAllLearners(submissions, assignments) {
     // 2. For each learner, get their submissions
     // 3. Build result object for each learner
     // 4. Return array of result objects
+    const learnerIds = getUniqueLearnerIds(submissions);
+    const results = [];
+    
+    learnerIds.forEach(learnerId => {
+        const learnerSubmissions = getSubmissionsForLearner(submissions, learnerId);
+        const learnerResult = buildLearnerResult(learnerId, learnerSubmissions, assignments);
+        results.push(learnerResult);
+    });
+    
+    return results;
 }
 
 // TODO: Uncomment after creating function
-// const results = processAllLearners(submissions, assignments);
-// console.log("All Results:");
-// console.log(JSON.stringify(results, null, 2));
+const results = processAllLearners(submissions, assignments);
+console.log("All Results:");
+console.log(JSON.stringify(results, null, 2));
 
 // Task 7: Handle late submissions
 // TODO: Modify the calculation to apply late penalty
@@ -125,12 +188,24 @@ function calculateScoreWithPenalty(submission, assignment) {
     // 1. Check if submission is late (submitted_at > due_at)
     // 2. If late, deduct 10% of points_possible from score
     // 3. Return adjusted score
+    const submittedDate = new Date(submission.submission.submitted_at);
+    const dueDate = new Date(assignment.due_at);
+    
+    let adjustedScore = submission.submission.score;
+    
+    if (submittedDate > dueDate) {
+        // Apply 10% penalty of points_possible
+        const penalty = assignment.points_possible * 0.10;
+        adjustedScore = Math.max(0, adjustedScore - penalty);
+    }
+    
+    return adjustedScore;
 }
 
 // TODO: Test with a late submission
-// const lateSubmission = { submission: { submitted_at: "2024-01-23", score: 140 } };
-// const assignment2 = { due_at: "2024-01-22", points_possible: 150 };
-// console.log("Score with penalty:", calculateScoreWithPenalty(lateSubmission, assignment2));
+const lateSubmission = { submission: { submitted_at: "2024-01-23", score: 140 } };
+const assignment2 = { due_at: "2024-01-22", points_possible: 150 };
+console.log("Score with penalty:", calculateScoreWithPenalty(lateSubmission, assignment2));
 
 // Task 8: Advanced - Build complete getLearnerData structure
 // TODO: Combine everything into one function that mimics the SBA
@@ -150,9 +225,60 @@ function getLearnerData(course, assignmentGroup, submissions) {
     //    c. Calculate weighted average
     // 4. Return array of learner result objects
     
-    const results = [];
+    // 1. Validate course_id matches
+    if (course.id !== assignmentGroup.course_id) {
+        throw new Error("Invalid input: assignment group does not belong to this course");
+    }
     
-    // TODO: Implement the logic
+    const results = [];
+    const assignments = assignmentGroup.assignments;
+    const learnerIds = getUniqueLearnerIds(submissions);
+    
+    // For each learner
+    learnerIds.forEach(learnerId => {
+        const learnerSubmissions = getSubmissionsForLearner(submissions, learnerId);
+        const result = {
+            id: learnerId,
+            avg: 0
+        };
+        
+        let totalScore = 0;
+        let totalPossible = 0;
+        
+        // For each submission
+        learnerSubmissions.forEach(submission => {
+            const assignment = assignments.find(a => a.id === submission.assignment_id);
+            
+            if (assignment && assignment.points_possible > 0) {
+                // Check if submission is late and apply penalty if needed
+                let adjustedScore = submission.submission.score;
+                const submittedDate = new Date(submission.submission.submitted_at);
+                const dueDate = new Date(assignment.due_at);
+                
+                if (submittedDate > dueDate) {
+                    const penalty = assignment.points_possible * 0.10;
+                    adjustedScore = Math.max(0, adjustedScore - penalty);
+                }
+                
+                // Calculate percentage
+                const percentage = (adjustedScore / assignment.points_possible) * 100;
+                
+                // Add to result object
+                result[submission.assignment_id] = percentage;
+                
+                // Update totals for average calculation
+                totalScore += adjustedScore;
+                totalPossible += assignment.points_possible;
+            }
+        });
+        
+        // Calculate weighted average
+        if (totalPossible > 0) {
+            result.avg = totalScore / totalPossible;
+        }
+        
+        results.push(result);
+    });
     
     return results;
 }
@@ -167,6 +293,6 @@ const assignmentGroup = {
 };
 
 // TODO: Uncomment after creating function
-// const finalResults = getLearnerData(course, assignmentGroup, submissions);
-// console.log("Final Results:");
-// console.log(JSON.stringify(finalResults, null, 2));
+const finalResults = getLearnerData(course, assignmentGroup, submissions);
+console.log("Final Results:");
+console.log(JSON.stringify(finalResults, null, 2));
