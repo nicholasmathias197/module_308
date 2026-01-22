@@ -96,13 +96,8 @@ const LearnerSubmissions = [
 function getLearnerData(course, ag, submissions) {
     // TODO: Step 1 - Validate that ag.course_id matches course.id
     // If not, throw an error
-    try {
-        if (ag.course_id !== course.id) {
-            throw new Error("Invalid input: assignment group does not belong to this course");
-        }
-    } catch (error) {
-        console.log("Error:", error.message);
-        return [];
+    if (ag.course_id !== course.id) {
+        throw new Error("Invalid input: assignment group does not belong to this course");
     }
 
     // TODO: Step 2 - Get current date to filter out future assignments
@@ -111,31 +106,58 @@ function getLearnerData(course, ag, submissions) {
     // TODO: Step 3 - Helper function to check if assignment is due
     function isAssignmentDue(assignment) {
         // TODO: Return true if assignment.due_at <= currentDate
+        const dueDate = new Date(assignment.due_at);
+        return dueDate <= currentDate;
     }
 
     // TODO: Step 4 - Helper function to check if submission is late
     function isSubmissionLate(submission, assignment) {
         // TODO: Compare submission.submission.submitted_at with assignment.due_at
+        const submittedDate = new Date(submission.submission.submitted_at);
+        const dueDate = new Date(assignment.due_at);
+        return submittedDate > dueDate;
     }
 
     // TODO: Step 5 - Helper function to calculate final score (with late penalty if needed)
     function calculateFinalScore(submission, assignment) {
         // TODO: If late, subtract 10% of points_possible from score
+        let finalScore = submission.submission.score;
+        
+        // Skip if points_possible is 0 or invalid
+        if (!assignment.points_possible || assignment.points_possible <= 0) {
+            return 0;
+        }
+        
+        if (isSubmissionLate(submission, assignment)) {
+            const penalty = assignment.points_possible * 0.10;
+            finalScore = Math.max(0, finalScore - penalty);
+        }
+        
+        // Make sure score doesn't exceed points possible
+        return Math.min(finalScore, assignment.points_possible);
     }
 
     // TODO: Step 6 - Helper function to find assignment by id
     function findAssignment(assignmentId) {
         // TODO: Search through ag.assignments to find matching id
+        return ag.assignments.find(assignment => assignment.id === assignmentId);
     }
 
     // TODO: Step 7 - Get unique learner IDs from submissions
-    function getUniqueLearnerIds() {
+    function getUniqueLearnerIds(submissionsArray) {
         // TODO: Extract unique learner_id values
+        const learnerIds = [];
+        submissionsArray.forEach(submission => {
+            if (!learnerIds.includes(submission.learner_id)) {
+                learnerIds.push(submission.learner_id);
+            }
+        });
+        return learnerIds;
     }
 
     // TODO: Step 8 - Main processing logic
     const results = [];
-    const learnerIds = getUniqueLearnerIds();
+    const learnerIds = getUniqueLearnerIds(submissions);
 
     // TODO: For each learner...
     for (const learnerId of learnerIds) {
@@ -159,6 +181,11 @@ function getLearnerData(course, ag, submissions) {
                     continue;
                 }
 
+                // Skip if points_possible is 0 or invalid
+                if (!assignment.points_possible || assignment.points_possible <= 0) {
+                    continue;
+                }
+
                 // TODO: Calculate final score with late penalty
                 const finalScore = calculateFinalScore(submission, assignment);
 
@@ -166,7 +193,7 @@ function getLearnerData(course, ag, submissions) {
                 const percentage = finalScore / assignment.points_possible;
 
                 // TODO: Add to result object
-                result[assignment.id] = percentage;
+                result[assignment.id] = parseFloat(percentage.toFixed(3));
 
                 // TODO: Add to totals for weighted average
                 totalScore += finalScore;
@@ -176,7 +203,7 @@ function getLearnerData(course, ag, submissions) {
 
         // TODO: Calculate weighted average
         if (totalPossible > 0) {
-            result.avg = totalScore / totalPossible;
+            result.avg = parseFloat((totalScore / totalPossible).toFixed(3));
         }
 
         results.push(result);
@@ -218,3 +245,53 @@ try {
 // - What if points_possible is 0?
 // - What if there are submissions for non-existent assignments?
 // - What if course_id doesn't match?
+
+console.log("\n=== Testing Edge Cases ===");
+
+// Test 1: Course ID doesn't match
+console.log("\n1. Testing mismatched course_id:");
+const badCourse = { id: 999, name: "Wrong Course" };
+try {
+    const badResult = getLearnerData(badCourse, AssignmentGroup, LearnerSubmissions);
+    console.log("Result should be empty:", badResult);
+} catch (error) {
+    console.log("Expected error:", error.message);
+}
+
+// Test 2: Assignment with 0 points possible
+console.log("\n2. Testing assignment with 0 points possible:");
+const AssignmentGroupZero = {
+    ...AssignmentGroup,
+    assignments: [
+        { id: 1, name: "Zero Points", due_at: "2023-01-25", points_possible: 0 },
+        { id: 2, name: "Normal Points", due_at: "2023-02-27", points_possible: 100 }
+    ]
+};
+
+const SubmissionsZero = [
+    { learner_id: 125, assignment_id: 1, submission: { submitted_at: "2023-01-25", score: 0 } },
+    { learner_id: 125, assignment_id: 2, submission: { submitted_at: "2023-02-12", score: 95 } }
+];
+
+try {
+    const zeroResult = getLearnerData(CourseInfo, AssignmentGroupZero, SubmissionsZero);
+    console.log("Result with zero-point assignment:");
+    console.log(JSON.stringify(zeroResult, null, 2));
+} catch (error) {
+    console.log("Error:", error.message);
+}
+
+// Test 3: Submission for non-existent assignment
+console.log("\n3. Testing submission for non-existent assignment:");
+const SubmissionsInvalid = [
+    { learner_id: 125, assignment_id: 999, submission: { submitted_at: "2023-01-25", score: 100 } },
+    { learner_id: 125, assignment_id: 1, submission: { submitted_at: "2023-01-25", score: 47 } }
+];
+
+try {
+    const invalidResult = getLearnerData(CourseInfo, AssignmentGroup, SubmissionsInvalid);
+    console.log("Result with invalid assignment ID:");
+    console.log(JSON.stringify(invalidResult, null, 2));
+} catch (error) {
+    console.log("Error:", error.message);
+}
